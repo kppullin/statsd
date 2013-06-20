@@ -8,7 +8,8 @@ namespace Statsd
     public class StatsdPipe : IDisposable
     {
         private readonly UdpClient udpClient;
-
+        private readonly Func<Exception, bool> sendExceptionHandler;
+            
         [ThreadStatic]
         private static Random random;
 
@@ -20,11 +21,29 @@ namespace Statsd
             }
         }
 
+        /// <summary>
+        /// Create a new StatsdPipe
+        /// </summary>
+        /// <param name="host">The statsd `host`</param>
+        /// <param name="port">The statsd `port`</param>
         public StatsdPipe(string host, int port)
+            : this(host, port, null)
+        {
+            
+        }
+
+        /// <summary>
+        /// Create a new StatsdPipe
+        /// </summary>
+        /// <param name="host">The statsd `host`</param>
+        /// <param name="port">The statsd `port`</param>
+        /// <param name="sendExceptionHandler">An exception handler for errors generated when UdpClient.Send() fails. Return `true` to continue processing the current batch, false to stop.</param>
+        public StatsdPipe(string host, int port, Func<Exception, bool> sendExceptionHandler)
         {
             udpClient = new UdpClient(host, port);
+            this.sendExceptionHandler = sendExceptionHandler;
         }
-        
+
         public bool Gauge(string key, int value)
         {
             return Gauge(key, value, 1.0);
@@ -139,7 +158,21 @@ namespace Statsd
         {
             var data = Encoding.Default.GetBytes(stat + "\n");
 
-            udpClient.Send(data, data.Length);
+            try
+            {
+                udpClient.Send(data, data.Length);
+            }
+            catch (Exception ex)
+            {
+                if (sendExceptionHandler != null)
+                {
+                    return sendExceptionHandler(ex);
+                }
+                else
+                {
+                    throw;
+                }
+            }
             return true;
         }
 
