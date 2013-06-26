@@ -160,7 +160,10 @@ namespace Statsd
 
             try
             {
-                udpClient.Send(data, data.Length);
+                lock (udpClient)
+                {
+                    udpClient.Send(data, data.Length);
+                }
             }
             catch (Exception ex)
             {
